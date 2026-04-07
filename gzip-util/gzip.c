@@ -2,6 +2,22 @@
 
 // Gzip specification - https://datatracker.ietf.org/doc/html/rfc1952
 
+void precompute_crc_table(unsigned int crc_table[]) {
+    int n, k;
+    unsigned long c;
+    for (n = 0; n < 256; n++) {
+        c = (unsigned long) n;
+        for (k = 0; k < 8; k++) {
+            if (c & 1) {
+                c = (c >> 1) ^ 0xEDB88320L;
+            } else {
+                c = c >> 1;
+            }
+        }
+        crc_table[n] = c;
+    }
+}
+
 void write_header_bytes(FILE *out) {
     // Header bytes for gzip format
     unsigned char header[10];
@@ -31,24 +47,18 @@ void write_header_bytes(FILE *out) {
     fwrite(header, 1, sizeof(header), out);
 }
 
-void write_trailer_bytes(FILE *out, unsigned char *input_bytes, size_t bytes_read) {
+void write_trailer_bytes(FILE *out, unsigned char *input_bytes, size_t bytes_read, unsigned int crc_table[]) {
     // Trailer bytes for gzip format
     unsigned char trailer[8];
 
-    // CRC32 — use 0 for now, we'll implement it later
+    // CRC32 
     unsigned int crc = 0xffffffff;
     for(size_t i = 0; i < bytes_read; i++) {
-        unsigned char curr_byte = input_bytes[i];
-        crc = crc ^ curr_byte;
-        for (int k = 0; k < 8; k++) {
-            if (crc & 1) {
-                crc = (crc >> 1) ^ 0xEDB88320;
-            } else {
-                crc = crc >> 1;
-            }
-        }
+        crc = crc_table[(crc ^ input_bytes[i]) & 0xff] ^ (crc >> 8);
     }
+    // flip one more time
     crc = crc ^ 0xffffffff;
+
     trailer[0] = crc & 0xff;
     trailer[1] = (crc >> 8) & 0xff;
     trailer[2] = (crc >> 16) & 0xff;
@@ -91,6 +101,10 @@ int main(int argc, char *argv[]) {
         printf("Cannot create output file: %s\n", outname);
         return 1;
     }
+    
+    // precompute crc table
+    unsigned int crc_table[256];
+    precompute_crc_table(crc_table);
 
     unsigned char block_header[5];
     block_header[0] = 0x01;                          // final block, no compression
@@ -102,7 +116,7 @@ int main(int argc, char *argv[]) {
     write_header_bytes(out);
     fwrite(block_header, 1, sizeof(block_header), out);
     fwrite(buffer, 1, bytes_read, out);
-    write_trailer_bytes(out, buffer, bytes_read);
+    write_trailer_bytes(out, buffer, bytes_read, crc_table);
     fclose(out);
 
     return 0;
