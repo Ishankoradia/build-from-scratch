@@ -89,7 +89,7 @@ int main(int argc, char *argv[]) {
     precompute_crc_table(crc_table);
 
     unsigned char block_header[5];
-    block_header[0] = 0x01;                          // final block, no compression
+    block_header[0] = 0x03;                          // BFINAL=1, BTYPE=01 (fixed Huffman)
     block_header[1] = bytes_read & 0xff;              // length low byte
     block_header[2] = (bytes_read >> 8) & 0xff;       // length high byte
     block_header[3] = ~bytes_read & 0xff;             // one's complement of length low
