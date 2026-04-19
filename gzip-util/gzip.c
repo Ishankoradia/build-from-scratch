@@ -1,22 +1,10 @@
-# include <stdio.h>
+#include <stdio.h>
+#include <stdint.h>
+#include "checksum.h"
 
 // Gzip specification - https://datatracker.ietf.org/doc/html/rfc1952
 
-void precompute_crc_table(unsigned int crc_table[]) {
-    int n, k;
-    unsigned long c;
-    for (n = 0; n < 256; n++) {
-        c = (unsigned long) n;
-        for (k = 0; k < 8; k++) {
-            if (c & 1) {
-                c = (c >> 1) ^ 0xEDB88320L;
-            } else {
-                c = c >> 1;
-            }
-        }
-        crc_table[n] = c;
-    }
-}
+// Huffman code paper - https://www.ias.ac.in/article/fulltext/reso/011/02/0091-0099
 
 void write_header_bytes(FILE *out) {
     // Header bytes for gzip format
@@ -51,13 +39,7 @@ void write_trailer_bytes(FILE *out, unsigned char *input_bytes, size_t bytes_rea
     // Trailer bytes for gzip format
     unsigned char trailer[8];
 
-    // CRC32 
-    unsigned int crc = 0xffffffff;
-    for(size_t i = 0; i < bytes_read; i++) {
-        crc = crc_table[(crc ^ input_bytes[i]) & 0xff] ^ (crc >> 8);
-    }
-    // flip one more time
-    crc = crc ^ 0xffffffff;
+    uint32_t crc = compute_crc32(bytes_read, input_bytes);
 
     trailer[0] = crc & 0xff;
     trailer[1] = (crc >> 8) & 0xff;
